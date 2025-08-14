@@ -5,9 +5,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recha
 
 export default function AdminDashboard() {
 	const [metricas, setMetricas] = useState<any>(null)
-	const token = localStorage.getItem('admin_token')
 
 	useEffect(() => {
+		const token = sessionStorage.getItem('admin_token')
 		api.get('/admin/metricas', { headers: { Authorization: `Bearer ${token}` } })
 			.then(r => setMetricas(r.data))
 	}, [])

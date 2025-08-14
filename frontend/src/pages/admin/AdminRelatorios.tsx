@@ -5,9 +5,9 @@ import api from '../../lib/api'
 export default function AdminRelatorios() {
 	const [inicio, setInicio] = useState('')
 	const [fim, setFim] = useState('')
-	const token = localStorage.getItem('admin_token')
 
 	function baixarCsv() {
+		const token = sessionStorage.getItem('admin_token')
 		api.get('/admin/relatorios/csv', { headers: { Authorization: `Bearer ${token}` }, responseType: 'blob' }).then(res => {
 			const url = URL.createObjectURL(res.data)
 			const a = document.createElement('a')
@@ -19,6 +19,7 @@ export default function AdminRelatorios() {
 	}
 
 	function baixarPdf() {
+		const token = sessionStorage.getItem('admin_token')
 		api.get('/admin/relatorios/pdf', { headers: { Authorization: `Bearer ${token}` }, responseType: 'blob' }).then(res => {
 			const url = URL.createObjectURL(res.data)
 			const a = document.createElement('a')

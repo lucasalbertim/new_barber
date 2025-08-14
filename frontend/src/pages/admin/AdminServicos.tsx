@@ -7,7 +7,6 @@ interface Servico { id: number; nome: string; preco: number; tempo_estimado: num
 export default function AdminServicos() {
 	const [servicos, setServicos] = useState<Servico[]>([])
 	const [form, setForm] = useState<{id?: number, nome: string, preco: string, tempo_estimado: string}>({ nome: '', preco: '', tempo_estimado: '' })
-	const token = localStorage.getItem('admin_token')
 
 	function load() {
 		api.get('/servicos').then(r => setServicos(r.data))
@@ -16,6 +15,7 @@ export default function AdminServicos() {
 
 	async function salvar(e: React.FormEvent) {
 		e.preventDefault()
+		const token = sessionStorage.getItem('admin_token')
 		const payload = { nome: form.nome, preco: parseFloat(form.preco), tempo_estimado: parseInt(form.tempo_estimado) }
 		if (form.id) {
 			await api.put(`/servicos/${form.id}`, payload, { headers: { Authorization: `Bearer ${token}` } })
@@ -27,6 +27,7 @@ export default function AdminServicos() {
 	}
 
 	async function remover(id: number) {
+		const token = sessionStorage.getItem('admin_token')
 		await api.delete(`/servicos/${id}`, { headers: { Authorization: `Bearer ${token}` } })
 		load()
 	}

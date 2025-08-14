@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import BotaoVoltar from './BotaoVoltar'
 
 export default function AdminLayout({ title, children }: { title: string, children: any }) {
 	const navigate = useNavigate()
@@ -19,7 +20,10 @@ export default function AdminLayout({ title, children }: { title: string, childr
 					</div>
 				</div>
 			</nav>
-			<div className="container mt-4">{children}</div>
+			<div className="container mt-4">
+				<BotaoVoltar />
+				{children}
+			</div>
 		</div>
 	)
 }
