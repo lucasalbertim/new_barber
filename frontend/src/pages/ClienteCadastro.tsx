@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Navbar from '../components/Navbar'
 import api from '../lib/api'
 import { useNavigate } from 'react-router-dom'
+import BotaoVoltar from '../components/BotaoVoltar'
 
 function validarCPF(cpf: string) {
 	cpf = cpf.replace(/\D/g, '')
@@ -38,8 +39,9 @@ export default function ClienteCadastro() {
 		if (!validarCPF(cpf)) return setErro('CPF inválido')
 		if (!validarTelefone(telefone)) return setErro('Telefone inválido')
 		try {
-			await api.post('/clientes', { nome, cpf, telefone, email })
-			navigate('/escolher-servicos', { state: { cpfOuTelefone: cpf } })
+			const resp = await api.post('/clientes', { nome, cpf, telefone, email })
+			sessionStorage.setItem('cliente_id', String(resp.data.id))
+			navigate('/escolher-servicos')
 		} catch (err: any) {
 			setErro(err?.response?.data?.detail || 'Erro ao cadastrar')
 		}
@@ -49,6 +51,7 @@ export default function ClienteCadastro() {
 		<div>
 			<Navbar />
 			<div className="container">
+				<BotaoVoltar />
 				<h2>Cadastro de Cliente</h2>
 				<form className="row g-3" onSubmit={onSubmit}>
 					<div className="col-md-6">

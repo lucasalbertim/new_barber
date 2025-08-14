@@ -1,17 +1,21 @@
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../lib/api'
-import { useEffect, useState } from 'react'
+import BotaoVoltar from '../components/BotaoVoltar'
 
 type Servico = { id: number; nome: string; preco: number; tempo_estimado: number }
 
 export default function Resumo() {
 	const { state } = useLocation() as any
 	const escolhidos: Servico[] = state?.escolhidos || []
-	const cpfOuTelefone: string = state?.cpfOuTelefone
 	const [erro, setErro] = useState('')
 	const [ok, setOk] = useState('')
 	const navigate = useNavigate()
+
+	useEffect(() => {
+		if (!sessionStorage.getItem('cliente_id')) navigate('/login-cliente', { replace: true })
+	}, [navigate])
 
 	const total = escolhidos.reduce((acc, s) => acc + s.preco, 0)
 	const tempo = escolhidos.reduce((acc, s) => acc + s.tempo_estimado, 0)
@@ -19,8 +23,7 @@ export default function Resumo() {
 	async function confirmar() {
 		setErro(''); setOk('')
 		try {
-			const cliente = await api.get(`/clientes/${encodeURIComponent(cpfOuTelefone)}`)
-			const cliente_id = cliente.data.id
+			const cliente_id = Number(sessionStorage.getItem('cliente_id'))
 			await api.post('/atendimentos', {
 				cliente_id,
 				servicos: escolhidos.map(s => ({ servico_id: s.id }))
@@ -36,6 +39,7 @@ export default function Resumo() {
 		<div>
 			<Navbar />
 			<div className="container">
+				<BotaoVoltar />
 				<h2>Resumo</h2>
 				<ul className="list-group">
 					{escolhidos.map(s => (

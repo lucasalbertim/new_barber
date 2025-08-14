@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import Navbar from '../components/Navbar'
 import api from '../lib/api'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
+import BotaoVoltar from '../components/BotaoVoltar'
 
 type Servico = {
 	id: number
@@ -13,13 +14,13 @@ type Servico = {
 export default function EscolherServicos() {
 	const [servicos, setServicos] = useState<Servico[]>([])
 	const [selecionados, setSelecionados] = useState<number[]>([])
-	const location = useLocation()
 	const navigate = useNavigate()
-	const cpfOuTelefone = (location.state as any)?.cpfOuTelefone
 
 	useEffect(() => {
+		const cliente = sessionStorage.getItem('cliente_id')
+		if (!cliente) navigate('/login-cliente', { replace: true })
 		api.get('/servicos').then(r => setServicos(r.data))
-	}, [])
+	}, [navigate])
 
 	function toggleServico(id: number) {
 		setSelecionados(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -27,13 +28,14 @@ export default function EscolherServicos() {
 
 	function continuar() {
 		const escolhidos = servicos.filter(s => selecionados.includes(s.id))
-		navigate('/resumo', { state: { escolhidos, cpfOuTelefone } })
+		navigate('/resumo', { state: { escolhidos } })
 	}
 
 	return (
 		<div>
 			<Navbar />
 			<div className="container">
+				<BotaoVoltar />
 				<h2>Escolha de Serviços</h2>
 				<div className="row">
 					{servicos.map(s => (
