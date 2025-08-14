@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from .database import Base
@@ -48,3 +48,8 @@ class Admin(Base):
 	nome = Column(String(255), nullable=False)
 	email = Column(String(255), unique=True, index=True, nullable=False)
 	senha_hash = Column(String(255), nullable=False)
+
+class ConfigKV(Base):
+	__tablename__ = "config"
+	key = Column(String(100), primary_key=True)
+	value = Column(Text, nullable=True)

@@ -1,7 +1,7 @@
 import io
 import csv
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -47,9 +47,38 @@ def metricas(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
 
 # Listagem de clientes e export CSV
 @router.get("/clientes")
-def listar_clientes(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
-	clientes = db.query(models.Cliente).order_by(models.Cliente.criado_em.desc()).all()
+def listar_clientes(q: str | None = None, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+	query = db.query(models.Cliente)
+	if q:
+		like = f"%{q}%"
+		query = query.filter(
+			(models.Cliente.nome.ilike(like)) |
+			(models.Cliente.cpf.ilike(like)) |
+			(models.Cliente.telefone.ilike(like))
+		)
+	clientes = query.order_by(models.Cliente.criado_em.desc()).all()
 	return clientes
+
+@router.put("/clientes/{cliente_id}")
+def atualizar_cliente(cliente_id: int, payload: dict, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+	cliente = db.get(models.Cliente, cliente_id)
+	if not cliente:
+		raise HTTPException(status_code=404, detail="Cliente não encontrado")
+	for k in ["nome", "cpf", "telefone", "email"]:
+		if k in payload:
+			setattr(cliente, k, payload[k])
+	db.commit()
+	db.refresh(cliente)
+	return cliente
+
+@router.delete("/clientes/{cliente_id}")
+def remover_cliente(cliente_id: int, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+	cliente = db.get(models.Cliente, cliente_id)
+	if not cliente:
+		raise HTTPException(status_code=404, detail="Cliente não encontrado")
+	db.delete(cliente)
+	db.commit()
+	return {"ok": True}
 
 @router.get("/clientes/csv")
 def exportar_clientes_csv(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
@@ -66,36 +95,81 @@ def exportar_clientes_csv(db: Session = Depends(get_db), admin=Depends(get_curre
 # Configure no .env:
 # WHATSAPP_CLOUD_API_TOKEN=seu_token_gerado_no_Meta
 # WHATSAPP_PHONE_ID=seu_phone_number_id (ID do remetente)
+# Configuração WhatsApp via config table
+@router.get("/marketing/config")
+def obter_marketing_config(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+	items = db.query(models.ConfigKV).filter(models.ConfigKV.key.in_(["WHATSAPP_CLOUD_API_TOKEN", "WHATSAPP_PHONE_ID"]))
+	data = {i.key: i.value for i in items}
+	return data
+
+@router.post("/marketing/config")
+def salvar_marketing_config(
+	token: str = Form(...),
+	phone_id: str = Form(...),
+	db: Session = Depends(get_db),
+	admin=Depends(get_current_admin)
+):
+	for key, value in [("WHATSAPP_CLOUD_API_TOKEN", token), ("WHATSAPP_PHONE_ID", phone_id)]:
+		row = db.get(models.ConfigKV, key)
+		if not row:
+			row = models.ConfigKV(key=key, value=value)
+			db.add(row)
+		else:
+			row.value = value
+	db.commit()
+	return {"ok": True}
+
+# Envio marketing com texto e imagem (banner opcional)
 @router.post("/marketing/whatsapp")
-def enviar_marketing_whatsapp(payload: dict, db: Session = Depends(get_db), admin=Depends(get_current_admin)):
-	mensagem = payload.get("mensagem")
-	if not mensagem:
-		raise HTTPException(status_code=400, detail="Mensagem obrigatória")
-	if not settings.whatsapp_cloud_api_token or not settings.whatsapp_phone_id:
+def enviar_marketing_whatsapp(
+	mensagem: str = Form(""),
+	imagem: UploadFile | None = File(None),
+	db: Session = Depends(get_db),
+	admin=Depends(get_current_admin)
+):
+	# Prioriza config do banco; fallback para env
+	cfg = obter_marketing_config(db, admin)
+	token = cfg.get("WHATSAPP_CLOUD_API_TOKEN") or settings.whatsapp_cloud_api_token
+	phone_id = cfg.get("WHATSAPP_PHONE_ID") or settings.whatsapp_phone_id
+	if not token or not phone_id:
 		raise HTTPException(status_code=500, detail="Configuração da WhatsApp Cloud API ausente")
 	clientes = db.query(models.Cliente.telefone).all()
-	url = f"https://graph.facebook.com/v20.0/{settings.whatsapp_phone_id}/messages"
-	headers = {
-		"Authorization": f"Bearer {settings.whatsapp_cloud_api_token}",
-		"Content-Type": "application/json"
-	}
+	base_url = "https://graph.facebook.com/v20.0"
+	headers = {"Authorization": f"Bearer {token}"}
 	enviados = 0
 	falhas = 0
+	media_id = None
+	# Se houver imagem, subir primeiro (media upload)
+	if imagem is not None:
+		files = {"file": (imagem.filename, imagem.file, imagem.content_type)}
+		params = {"messaging_product": "whatsapp"}
+		resp = requests.post(f"{base_url}/{phone_id}/media", headers=headers, params=params, files=files, timeout=30)
+		if resp.status_code in (200, 201):
+			media_id = resp.json().get("id")
+		else:
+			falhas += len(clientes)
+			return {"enviados": enviados, "falhas": falhas, "erro": "Falha ao enviar mídia"}
+	
 	for (telefone,) in clientes:
-		# Ajuste de formatação pode ser necessário conforme padrão internacional E.164
-		data = {
-			"messaging_product": "whatsapp",
-			"to": telefone,
-			"type": "text",
-			"text": {"body": mensagem}
-		}
-		try:
-			resp = requests.post(url, json=data, headers=headers, timeout=10)
-			if resp.status_code in (200, 201):
-				enviados += 1
-			else:
-				falhas += 1
-		except Exception:
+		# Ajustar para formato E.164 conforme necessário
+		if media_id:
+			payload = {
+				"messaging_product": "whatsapp",
+				"to": telefone,
+				"type": "image",
+				"image": {"id": media_id, "caption": mensagem or ""}
+			}
+		else:
+			payload = {
+				"messaging_product": "whatsapp",
+				"to": telefone,
+				"type": "text",
+				"text": {"body": mensagem}
+			}
+		resp = requests.post(f"{base_url}/{phone_id}/messages", headers={**headers, "Content-Type": "application/json"}, json=payload, timeout=15)
+		if resp.status_code in (200, 201):
+			enviados += 1
+		else:
 			falhas += 1
 	return {"enviados": enviados, "falhas": falhas}
 

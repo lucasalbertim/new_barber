@@ -25,6 +25,10 @@ function validarTelefone(t: string) {
 	return d.length >= 10 && d.length <= 11
 }
 
+function maskCpf(v: string) { return v.replace(/\D/g, '').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2').slice(0,14) }
+function maskPhone(v: string) { const d = v.replace(/\D/g, ''); if (d.length <= 10) return d.replace(/(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3'); return d.replace(/(\d{2})(\d{5})(\d{0,4})/, '($1) $2-$3') }
+function isValidEmail(e: string) { return !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) }
+
 export default function ClienteCadastro() {
 	const [nome, setNome] = useState('')
 	const [cpf, setCpf] = useState('')
@@ -38,8 +42,9 @@ export default function ClienteCadastro() {
 		setErro('')
 		if (!validarCPF(cpf)) return setErro('CPF inválido')
 		if (!validarTelefone(telefone)) return setErro('Telefone inválido')
+		if (!isValidEmail(email)) return setErro('E-mail inválido')
 		try {
-			const resp = await api.post('/clientes', { nome, cpf, telefone, email })
+			const resp = await api.post('/clientes', { nome, cpf: cpf.replace(/\D/g, ''), telefone: telefone.replace(/\D/g, ''), email: email || null })
 			sessionStorage.setItem('cliente_id', String(resp.data.id))
 			sessionStorage.setItem('cliente_nome', String(resp.data.nome))
 			navigate('/boas-vindas-cliente', { state: { mensagem: `Seja bem-vindo, ${resp.data.nome}!` } })
@@ -61,14 +66,14 @@ export default function ClienteCadastro() {
 					</div>
 					<div className="col-md-6">
 						<label className="form-label">CPF</label>
-						<input className="form-control" value={cpf} onChange={e => setCpf(e.target.value)} required />
+						<input className="form-control" value={cpf} onChange={e => setCpf(maskCpf(e.target.value))} required />
 					</div>
 					<div className="col-md-6">
-						<label className="form-label">Telefone</label>
-						<input className="form-control" value={telefone} onChange={e => setTelefone(e.target.value)} required />
+						<label className="form-label">Telefone (WhatsApp)</label>
+						<input className="form-control" value={telefone} onChange={e => setTelefone(maskPhone(e.target.value))} required />
 					</div>
 					<div className="col-md-6">
-						<label className="form-label">E-mail</label>
+						<label className="form-label">E-mail (opcional)</label>
 						<input type="email" className="form-control" value={email} onChange={e => setEmail(e.target.value)} />
 					</div>
 					{erro && <div className="col-12"><div className="alert alert-danger">{erro}</div></div>}
