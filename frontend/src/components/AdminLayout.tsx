@@ -1,8 +1,11 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import BotaoVoltar from './BotaoVoltar'
 
 export default function AdminLayout({ title, children }: { title: string, children: any }) {
+	const navigate = useNavigate()
 	function sair() {
-		localStorage.removeItem('admin_token')
+		sessionStorage.removeItem('admin_token')
+		navigate('/admin/login')
 	}
 	return (
 		<div>
@@ -13,11 +16,14 @@ export default function AdminLayout({ title, children }: { title: string, childr
 						<Link to="/admin" className="btn btn-sm btn-outline-light me-2">Dashboard</Link>
 						<Link to="/admin/servicos" className="btn btn-sm btn-outline-light me-2">Serviços</Link>
 						<Link to="/admin/relatorios" className="btn btn-sm btn-outline-light me-2">Relatórios</Link>
-						<Link to="/" className="btn btn-sm btn-danger" onClick={sair}>Sair</Link>
+						<button className="btn btn-sm btn-danger" onClick={sair}>Sair</button>
 					</div>
 				</div>
 			</nav>
-			<div className="container mt-4">{children}</div>
+			<div className="container mt-4">
+				<BotaoVoltar />
+				{children}
+			</div>
 		</div>
 	)
 }

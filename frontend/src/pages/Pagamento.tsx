@@ -1,13 +1,22 @@
 import Navbar from '../components/Navbar'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import BotaoVoltar from '../components/BotaoVoltar'
+import { useNavigate } from 'react-router-dom'
 
 export default function Pagamento() {
 	const [metodo, setMetodo] = useState('pix')
 	const [ok, setOk] = useState('')
+	const navigate = useNavigate()
+
+	useEffect(() => {
+		if (!sessionStorage.getItem('cliente_id')) navigate('/login-cliente', { replace: true })
+	}, [navigate])
+
 	return (
 		<div>
 			<Navbar />
 			<div className="container">
+				<BotaoVoltar />
 				<h2>Pagamento</h2>
 				<div className="mb-3">
 					<label className="form-label">Método de Pagamento</label>

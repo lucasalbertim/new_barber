@@ -9,6 +9,8 @@ import AdminLogin from './pages/admin/AdminLogin'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminServicos from './pages/admin/AdminServicos'
 import AdminRelatorios from './pages/admin/AdminRelatorios'
+import PrivateRouteCliente from './components/PrivateRouteCliente'
+import PrivateRouteAdmin from './components/PrivateRouteAdmin'
 
 export default function App() {
 	return (
@@ -16,14 +18,14 @@ export default function App() {
 			<Route path="/" element={<Welcome />} />
 			<Route path="/cadastro-cliente" element={<ClienteCadastro />} />
 			<Route path="/login-cliente" element={<ClienteLogin />} />
-			<Route path="/escolher-servicos" element={<EscolherServicos />} />
-			<Route path="/resumo" element={<Resumo />} />
-			<Route path="/pagamento" element={<Pagamento />} />
+			<Route path="/escolher-servicos" element={<PrivateRouteCliente><EscolherServicos /></PrivateRouteCliente>} />
+			<Route path="/resumo" element={<PrivateRouteCliente><Resumo /></PrivateRouteCliente>} />
+			<Route path="/pagamento" element={<PrivateRouteCliente><Pagamento /></PrivateRouteCliente>} />
 
 			<Route path="/admin/login" element={<AdminLogin />} />
-			<Route path="/admin" element={<AdminDashboard />} />
-			<Route path="/admin/servicos" element={<AdminServicos />} />
-			<Route path="/admin/relatorios" element={<AdminRelatorios />} />
+			<Route path="/admin" element={<PrivateRouteAdmin><AdminDashboard /></PrivateRouteAdmin>} />
+			<Route path="/admin/servicos" element={<PrivateRouteAdmin><AdminServicos /></PrivateRouteAdmin>} />
+			<Route path="/admin/relatorios" element={<PrivateRouteAdmin><AdminRelatorios /></PrivateRouteAdmin>} />
 		</Routes>
 	)
 }

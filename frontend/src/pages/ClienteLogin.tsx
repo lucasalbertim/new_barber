@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Navbar from '../components/Navbar'
 import api from '../lib/api'
 import { useNavigate } from 'react-router-dom'
+import BotaoVoltar from '../components/BotaoVoltar'
 
 export default function ClienteLogin() {
 	const [cpfOuTelefone, setCpfOuTelefone] = useState('')
@@ -12,8 +13,10 @@ export default function ClienteLogin() {
 		e.preventDefault()
 		setErro('')
 		try {
-			await api.get(`/clientes/${encodeURIComponent(cpfOuTelefone)}`)
-			navigate('/escolher-servicos', { state: { cpfOuTelefone } })
+			const r = await api.get(`/clientes/${encodeURIComponent(cpfOuTelefone)}`)
+			sessionStorage.setItem('cliente_id', String(r.data.id))
+			// fluxo: login -> escolher-servicos
+			navigate('/escolher-servicos')
 		} catch {
 			setErro('Cliente não encontrado')
 		}
@@ -23,6 +26,7 @@ export default function ClienteLogin() {
 		<div>
 			<Navbar />
 			<div className="container">
+				<BotaoVoltar />
 				<h2>Login do Cliente</h2>
 				<form className="row g-3" onSubmit={onSubmit}>
 					<div className="col-md-8">

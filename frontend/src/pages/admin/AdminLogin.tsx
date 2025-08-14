@@ -2,6 +2,7 @@ import { useState } from 'react'
 import Navbar from '../../components/Navbar'
 import api from '../../lib/api'
 import { useNavigate } from 'react-router-dom'
+import BotaoVoltar from '../../components/BotaoVoltar'
 
 export default function AdminLogin() {
 	const [email, setEmail] = useState('admin@barbearia.com')
@@ -14,7 +15,7 @@ export default function AdminLogin() {
 		setErro('')
 		try {
 			const res = await api.post('/admin/token', { email, senha })
-			localStorage.setItem('admin_token', res.data.access_token)
+			sessionStorage.setItem('admin_token', res.data.access_token)
 			navigate('/admin')
 		} catch {
 			setErro('Credenciais inválidas')
@@ -24,6 +25,7 @@ export default function AdminLogin() {
 		<div>
 			<Navbar />
 			<div className="container">
+				<BotaoVoltar />
 				<h2>Login Admin</h2>
 				<form className="row g-3" onSubmit={onSubmit}>
 					<div className="col-md-6">
