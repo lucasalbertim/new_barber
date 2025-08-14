@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom'
 
 export default function Navbar() {
 	return (
-		<nav className="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+		<nav className="navbar navbar-expand-lg navbar-dark bg-dark mb-4 fixed-top">
 			<div className="container">
-				<Link to="/" className="navbar-brand">Barbearia</Link>
+				<Link to="/" className="navbar-brand">Metheus Barber</Link>
 				<button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navContent">
 					<span className="navbar-toggler-icon"></span>
 				</button>

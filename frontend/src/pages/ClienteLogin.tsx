@@ -15,8 +15,8 @@ export default function ClienteLogin() {
 		try {
 			const r = await api.get(`/clientes/${encodeURIComponent(cpfOuTelefone)}`)
 			sessionStorage.setItem('cliente_id', String(r.data.id))
-			// fluxo: login -> escolher-servicos
-			navigate('/escolher-servicos')
+			sessionStorage.setItem('cliente_nome', String(r.data.nome))
+			navigate('/boas-vindas-cliente', { state: { mensagem: `Bem-vindo de volta, ${r.data.nome}!` } })
 		} catch {
 			setErro('Cliente não encontrado')
 		}

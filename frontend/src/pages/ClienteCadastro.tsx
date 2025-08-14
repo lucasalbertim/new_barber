@@ -41,7 +41,8 @@ export default function ClienteCadastro() {
 		try {
 			const resp = await api.post('/clientes', { nome, cpf, telefone, email })
 			sessionStorage.setItem('cliente_id', String(resp.data.id))
-			navigate('/escolher-servicos')
+			sessionStorage.setItem('cliente_nome', String(resp.data.nome))
+			navigate('/boas-vindas-cliente', { state: { mensagem: `Seja bem-vindo, ${resp.data.nome}!` } })
 		} catch (err: any) {
 			setErro(err?.response?.data?.detail || 'Erro ao cadastrar')
 		}
