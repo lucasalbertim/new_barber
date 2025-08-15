@@ -1,6 +1,6 @@
 import io
 import csv
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -23,8 +23,8 @@ def login_admin(credentials: schemas.AdminLogin, db: Session = Depends(get_db)):
 
 @router.get("/metricas")
 def metricas(
-	inicio: str | None = Query(None, description="Data início ISO (YYYY-MM-DD)"),
-	fim: str | None = Query(None, description="Data fim ISO (YYYY-MM-DD)"),
+	inicio: date | str | None = Query(None, description="Data início ISO (YYYY-MM-DD) ou objeto date"),
+	fim: date | str | None = Query(None, description="Data fim ISO (YYYY-MM-DD) ou objeto date"),
 	group_by: str = Query("day", pattern="^(day|week|month)$"),
 	top_n: int = Query(10, ge=1, le=50),
 	db: Session = Depends(get_db),
@@ -36,10 +36,10 @@ def metricas(
 		start_d = end_d - timedelta(days=29)
 	else:
 		try:
-			start_d = datetime.fromisoformat(inicio).date()
-			end_d = datetime.fromisoformat(fim).date()
+			start_d = inicio if isinstance(inicio, date) else datetime.fromisoformat(str(inicio)).date()
+			end_d = fim if isinstance(fim, date) else datetime.fromisoformat(str(fim)).date()
 		except Exception:
-			raise HTTPException(status_code=400, detail="Datas inválidas. Use YYYY-MM-DD.")
+			raise HTTPException(status_code=400, detail="Datas inválidas. Use o formato YYYY-MM-DD.")
 	if start_d > end_d:
 		raise HTTPException(status_code=400, detail="Data início maior que data fim")
 
