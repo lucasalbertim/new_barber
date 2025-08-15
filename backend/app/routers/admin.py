@@ -1,10 +1,10 @@
 import io
 import csv
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, cast, Date
 from ..database import get_db
 from .. import schemas, models
 from ..auth import create_access_token, verify_password, hash_password, get_current_admin
@@ -22,27 +22,89 @@ def login_admin(credentials: schemas.AdminLogin, db: Session = Depends(get_db)):
 	return {"access_token": token, "token_type": "bearer"}
 
 @router.get("/metricas")
-def metricas(db: Session = Depends(get_db), admin=Depends(get_current_admin)):
+def metricas(
+	inicio: str | None = Query(None, description="Data início ISO (YYYY-MM-DD)"),
+	fim: str | None = Query(None, description="Data fim ISO (YYYY-MM-DD)"),
+	group_by: str = Query("day", pattern="^(day|week|month)$"),
+	top_n: int = Query(10, ge=1, le=50),
+	db: Session = Depends(get_db),
+	admin=Depends(get_current_admin)
+):
+	# Intervalo padrão: últimos 30 dias
+	if not inicio or not fim:
+		end_dt = datetime.utcnow().date()
+		start_dt = end_dt - timedelta(days=29)
+	else:
+		try:
+			start_dt = datetime.fromisoformat(inicio).date()
+			end_dt = datetime.fromisoformat(fim).date()
+		except Exception:
+			raise HTTPException(status_code=400, detail="Datas inválidas. Use YYYY-MM-DD.")
+	if start_dt > end_dt:
+		raise HTTPException(status_code=400, detail="Data início maior que data fim")
+
+	# Agregações básicas
 	total_clientes = db.query(func.count(models.Cliente.id)).scalar() or 0
-	total_atendimentos = db.query(func.count(models.Atendimento.id)).scalar() or 0
-	receita_total = float(db.query(func.coalesce(func.sum(models.Atendimento.valor_total), 0)).scalar() or 0)
+	q_base = db.query(models.Atendimento).filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+	total_atendimentos = q_base.count()
+	receita_total = float(db.query(func.coalesce(func.sum(models.Atendimento.valor_total), 0)).filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt)).scalar() or 0)
+
+	# Serviços mais usados no período
 	servicos_mais_usados = (
 		db.query(models.Servico.nome, func.count(models.AtendimentoServico.servico_id).label("qt"))
 		.join(models.AtendimentoServico, models.Servico.id == models.AtendimentoServico.servico_id)
+		.join(models.Atendimento, models.Atendimento.id == models.AtendimentoServico.atendimento_id)
+		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
 		.group_by(models.Servico.nome)
 		.order_by(func.count(models.AtendimentoServico.servico_id).desc())
-		.limit(5)
+		.limit(top_n)
 		.all()
 	)
+
+	# Séries temporais
+	date_col = cast(models.Atendimento.data, Date)
+	receita_por_periodo = (
+		db.query(date_col.label("date"), func.coalesce(func.sum(models.Atendimento.valor_total), 0).label("receita"))
+		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+		.group_by(date_col)
+		.order_by(date_col)
+		.all()
+	)
+	atendimentos_por_periodo = (
+		db.query(date_col.label("date"), func.count(models.Atendimento.id).label("atendimentos"))
+		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+		.group_by(date_col)
+		.order_by(date_col)
+		.all()
+	)
+
+	# Top clientes por visitas no período
+	visitas_por_cliente_top = (
+		db.query(models.Cliente.id, models.Cliente.nome, func.count(models.Atendimento.id).label("visitas"))
+		.join(models.Atendimento, models.Atendimento.cliente_id == models.Cliente.id)
+		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+		.group_by(models.Cliente.id, models.Cliente.nome)
+		.order_by(func.count(models.Atendimento.id).desc())
+		.limit(top_n)
+		.all()
+	)
+
 	media_visitas_por_cliente = 0.0
 	if total_clientes > 0:
 		media_visitas_por_cliente = (total_atendimentos / total_clientes)
+
 	return {
+		"inicio": str(start_dt),
+		"fim": str(end_dt),
+		"group_by": group_by,
 		"total_clientes": total_clientes,
 		"total_atendimentos": total_atendimentos,
 		"receita_total": receita_total,
 		"servicos_mais_usados": [{"nome": n, "quantidade": int(q)} for n, q in servicos_mais_usados],
 		"media_visitas_por_cliente": media_visitas_por_cliente,
+		"receita_por_periodo": [{"date": str(d), "receita": float(r)} for d, r in receita_por_periodo],
+		"atendimentos_por_periodo": [{"date": str(d), "atendimentos": int(a)} for d, a in atendimentos_por_periodo],
+		"visitas_por_cliente_top": [{"cliente_id": int(i), "nome": n, "visitas": int(v)} for i, n, v in visitas_por_cliente_top],
 	}
 
 # Listagem de clientes e export CSV
