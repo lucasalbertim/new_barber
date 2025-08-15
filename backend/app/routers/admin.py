@@ -1,10 +1,10 @@
 import io
 import csv
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Date
+from sqlalchemy import func, cast, Date, and_
 from ..database import get_db
 from .. import schemas, models
 from ..auth import create_access_token, verify_password, hash_password, get_current_admin
@@ -32,47 +32,51 @@ def metricas(
 ):
 	# Intervalo padrão: últimos 30 dias
 	if not inicio or not fim:
-		end_dt = datetime.utcnow().date()
-		start_dt = end_dt - timedelta(days=29)
+		end_d = datetime.utcnow().date()
+		start_d = end_d - timedelta(days=29)
 	else:
 		try:
-			start_dt = datetime.fromisoformat(inicio).date()
-			end_dt = datetime.fromisoformat(fim).date()
+			start_d = datetime.fromisoformat(inicio).date()
+			end_d = datetime.fromisoformat(fim).date()
 		except Exception:
 			raise HTTPException(status_code=400, detail="Datas inválidas. Use YYYY-MM-DD.")
-	if start_dt > end_dt:
+	if start_d > end_d:
 		raise HTTPException(status_code=400, detail="Data início maior que data fim")
+
+	start_dt = datetime.combine(start_d, time.min)
+	end_dt_exclusive = datetime.combine(end_d + timedelta(days=1), time.min)
+	period_filter = and_(models.Atendimento.data >= start_dt, models.Atendimento.data < end_dt_exclusive)
 
 	# Agregações básicas
 	total_clientes = db.query(func.count(models.Cliente.id)).scalar() or 0
-	q_base = db.query(models.Atendimento).filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+	q_base = db.query(models.Atendimento).filter(period_filter)
 	total_atendimentos = q_base.count()
-	receita_total = float(db.query(func.coalesce(func.sum(models.Atendimento.valor_total), 0)).filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt)).scalar() or 0)
+	receita_total = float(db.query(func.coalesce(func.sum(models.Atendimento.valor_total), 0)).filter(period_filter).scalar() or 0)
 
 	# Serviços mais usados no período
 	servicos_mais_usados = (
 		db.query(models.Servico.nome, func.count(models.AtendimentoServico.servico_id).label("qt"))
 		.join(models.AtendimentoServico, models.Servico.id == models.AtendimentoServico.servico_id)
 		.join(models.Atendimento, models.Atendimento.id == models.AtendimentoServico.atendimento_id)
-		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+		.filter(period_filter)
 		.group_by(models.Servico.nome)
 		.order_by(func.count(models.AtendimentoServico.servico_id).desc())
 		.limit(top_n)
 		.all()
 	)
 
-	# Séries temporais
+	# Séries temporais (agrupar por dia)
 	date_col = cast(models.Atendimento.data, Date)
 	receita_por_periodo = (
 		db.query(date_col.label("date"), func.coalesce(func.sum(models.Atendimento.valor_total), 0).label("receita"))
-		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+		.filter(period_filter)
 		.group_by(date_col)
 		.order_by(date_col)
 		.all()
 	)
 	atendimentos_por_periodo = (
 		db.query(date_col.label("date"), func.count(models.Atendimento.id).label("atendimentos"))
-		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+		.filter(period_filter)
 		.group_by(date_col)
 		.order_by(date_col)
 		.all()
@@ -82,7 +86,7 @@ def metricas(
 	visitas_por_cliente_top = (
 		db.query(models.Cliente.id, models.Cliente.nome, func.count(models.Atendimento.id).label("visitas"))
 		.join(models.Atendimento, models.Atendimento.cliente_id == models.Cliente.id)
-		.filter(cast(models.Atendimento.data, Date).between(start_dt, end_dt))
+		.filter(period_filter)
 		.group_by(models.Cliente.id, models.Cliente.nome)
 		.order_by(func.count(models.Atendimento.id).desc())
 		.limit(top_n)
@@ -94,8 +98,8 @@ def metricas(
 		media_visitas_por_cliente = (total_atendimentos / total_clientes)
 
 	return {
-		"inicio": str(start_dt),
-		"fim": str(end_dt),
+		"inicio": str(start_d),
+		"fim": str(end_d),
 		"group_by": group_by,
 		"total_clientes": total_clientes,
 		"total_atendimentos": total_atendimentos,
