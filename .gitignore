@@ -24,3 +24,5 @@ coverage/
 
 # Docker
 *.env.local
+backend/dev.db
+*.db
